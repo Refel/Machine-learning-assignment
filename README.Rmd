@@ -1,0 +1,161 @@
+---
+Title: "Reproducible Research Peer Assessment 2"
+Author: "Rafael M"
+Date: "Feb 27th 2015"
+Output: html_document
+---
+#Machine Learning Peer Assessment
+##Summary
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.  
+
+###Downloading data and library
+First we load the libraries we are going to use.  
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set (cache=FALSE)
+```
+
+```{r Loading libraries}
+library(ggplot2)
+library(lattice)
+library(corrplot)
+library(caret)
+library(randomForest)
+```
+
+
+###Downloading and loading data files
+We download the files: pml-training.csv and plm-testing.csv data and the quiz to train our model if we didnt downloaded them before. 
+Them we load these files to work with them.
+```{r Download Data File }
+if (!file.exists ("pml-training.csv" )) {
+ download.file ("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+    destfile="pml-training.csv" )
+}
+
+if (!file.exists ("pml-testing.csv")){ 
+ download.file ("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+    destfile="pml-testing.csv")
+}
+
+
+data <- read.csv("~/pml-training.csv")
+quiz  <- read.csv("~/pml-testing.csv")
+```
+
+###Understanding data and creating training and testing subsets
+We analice the data to understand it
+```{r Reading Understandig Data,results='hide'}
+names(data)
+head(data)
+summary(data)
+````
+
+We create the trainning and test subsets.  
+```{r Subseting}
+set.seed(1999)
+PreSize=100/100
+intraining <- createDataPartition(data$classe, p = .7*PreSize,list = FALSE)
+training <- data[ intraining,]
+test  <-data[ -intraining,]
+```
+
+The size of our dataset is.
+```{r The Data size }
+dim(training)
+```
+###Cleanning and preprocessing data
+We are going to eliminate the columms with data that is not relevant to the prediction model:  
+
+* The first 7 colums have information not related to the phisical activity.  
+* The colums with more then 95% of NA values.  
+* Predictor with small variance.  
+* Predictors with linear dependencies.  
+
+```{r Cleanning data}
+#Elimante columns 1 to 7 SortData the information is not relevant
+training<-training[,-(1:7)]
+
+#Elimante columns witch NA>90%
+NACols<-NULL 
+for (i in 1:ncol(training))
+{
+  if(length(which(!is.na(training[,i])))< 0.90*nrow(training))
+  NACols<-c(NACols,i)
+}
+training<-training[,-(NACols)]
+NACols<-NULL
+
+## remove some zero variance predictors 
+training<-training[,-(nearZeroVar(training))]
+## remove predictors with linear dependencies < 70%
+ColClasse<-which(colnames(training)=="classe")
+training <- training[, -findCorrelation(cor(training[,-ColClasse]), .7)]
+dim(training)
+```
+###Predictor reduction and correlation matrix.  
+The number of the predictors has been reduced considerably.  
+We preproces the data to transforme it and make it better for our model training process and we can see in the graph that there is not big correlations between predictors.  
+
+```{r Plotting the matrix corelation}
+ColClasse<-which(colnames(training)=="classe")
+corMarix<-abs(cor(training[,-ColClasse]))
+corrplot(corMarix, order="FPC",type="lower",method="color",tl.cex=0.5)
+
+pp <- preProcess(training[,-ColClasse],
+                     method = c("center", "scale","YeoJohnson"))
+training<-predict(pp, newdata = training)
+test <-predict(pp, newdata = test)
+```
+
+We will alow multi core calculation to speed up the calculation,  and We will use the Random Forest model to predict the manner in which the exercise is done.  
+```{r Parallel computation and Train RFdodFit}
+library(doParallel)
+registerDoSEQ()
+cl<-makeCluster(detectCores(),type="PSOCK")
+registerDoParallel(cl)
+RFmodFit <- train(classe ~ ., data = training, method = "rf")
+stopCluster(cl)
+```
+## Acurracy and Confusion Matirx 
+We predict with the result of the calculated model with the test data and check the Accuracy we obtain.
+
+```{r Predecting }
+RFPredict<-predict(RFmodFit,test)
+cmRF<-confusionMatrix(RFPredict,test$classe)
+cmRF$overall["Accuracy"]
+````
+The confusion matrix with the results of apling the model to the test dataset.
+```{r confusion matrix}
+cmRF
+```
+## Most significant predictors
+We want no show what are the most significant predictor used in our model, we can see it in the graph below.  
+```{r Main Predictors}
+RocImp <- varImp(RFmodFit)
+plot(RocImp)
+```
+
+We preproces the data to transforme it and make it better for our model training process
+
+We predict with the result of the calculated model with the test data and check the Accuracy we obtain
+
+```{r Ploting Prediction vs Testing}
+qplot(RFPredict,test$classe,xlab="Real values",ylab="Predicted values",geom = c("boxplot", "jitter"),colour=test$class)
+```
+###Course Project Prediction Quiz Portion
+Apply your machine learning algorithm to the 20 test cases available in the test data above and submit your predictions in appropriate format to the Course Project Prediction Quiz for automated grading.
+The result of appling the model to the quiz data set is:
+```{r Predict Quiz}
+quiz <-predict(pp, newdata = quiz)
+quiz$classe<-predict(RFmodFit,quiz)
+quiz$classe
+````
+
+We show the session info to make the research reproducible.  
+```{r Session Info}
+sessionInfo ()
+```
+
+### Credits
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
