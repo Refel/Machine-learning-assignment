@@ -1,5 +1,5 @@
 ---
-Title: "Reproducible Research Peer Assessment 2"
+Title: "Reproducible Research Peer Assessment"
 Author: "Rafael M"
 Date: "Feb 27th 2015"
 Output: html_document
@@ -12,7 +12,7 @@ The goal of your project is to predict the manner in which they did the exercise
 First we load the libraries we are going to use.  
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set (cache=FALSE)
+knitr::opts_chunk$set (cache=TRUE)
 ```
 
 ```{r Loading libraries}
@@ -122,11 +122,19 @@ We predict with the result of the calculated model with the test data and check 
 
 ```{r Predecting }
 RFPredict<-predict(RFmodFit,test)
+````
+```{r confusion Accuracy}
 cmRF<-confusionMatrix(RFPredict,test$classe)
-cmRF$overall["Accuracy"]
+Accuracy<-cmRF$overall["Accuracy"]
+Error <-as.numeric(1 - (cmRF$overall["Accuracy"]))
+Accuracy
+````
+The Error is:
+```{r Error}
+as.numeric(Error)
 ````
 The confusion matrix with the results of apling the model to the test dataset.
-```{r confusion matrix}
+```{r confusion matrix 2}
 cmRF
 ```
 ## Most significant predictors
